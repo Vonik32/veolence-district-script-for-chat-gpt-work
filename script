@@ -5,31 +5,31 @@ local LocalPlayer = Players.LocalPlayer
 
 -- SETTINGS
 local SETTINGS = {
-	Players = true,
-	Killers = true,
-	Generators = true,
-	Hooked = true,
+	Players = false,
+	Killers = false,
+	Generators = false,
+	Hooked = false,
 	Mode = "Outline"
 }
 
+-- COLORS
 local COLORS = {
 	Player = Color3.fromRGB(0,255,255),
 	Killer = Color3.fromRGB(255,0,0),
 	Generator = Color3.fromRGB(255,255,0),
-	Hooked = Color3.fromRGB(255,100,255)
+	Hooked = Color3.fromRGB(255,0,255)
 }
 
 -- GUI
 local ScreenGui = Instance.new("ScreenGui", game.CoreGui)
 local Frame = Instance.new("Frame", ScreenGui)
 
-Frame.Size = UDim2.new(0,250,0,300)
+Frame.Size = UDim2.new(0,250,0,260)
 Frame.AnchorPoint = Vector2.new(0.5,0.5)
 Frame.Position = UDim2.new(0.5,0,0.5,0)
 Frame.BackgroundColor3 = Color3.fromRGB(20,20,20)
-Frame.BorderSizePixel = 0
 
--- DRAG (фикс нормальный)
+-- DRAG
 local dragging = false
 local dragStart, startPos
 
@@ -59,40 +59,46 @@ UIS.InputChanged:Connect(function(input)
 	end
 end)
 
--- КНОПКИ
-local function Button(text, y, callback)
-	local b = Instance.new("TextButton", Frame)
-	b.Size = UDim2.new(1,-10,0,30)
-	b.Position = UDim2.new(0,5,0,y)
-	b.Text = text
-	b.BackgroundColor3 = Color3.fromRGB(40,40,40)
-	b.TextColor3 = Color3.new(1,1,1)
+-- КНОПКА С КВАДРАТОМ
+local function Toggle(name, y, setting)
+	local btn = Instance.new("TextButton", Frame)
+	btn.Size = UDim2.new(1,-10,0,30)
+	btn.Position = UDim2.new(0,5,0,y)
+	btn.Text = name
+	btn.BackgroundColor3 = Color3.fromRGB(40,40,40)
+	btn.TextColor3 = Color3.new(1,1,1)
 
-	b.MouseButton1Click:Connect(callback)
+	local box = Instance.new("Frame", btn)
+	box.Size = UDim2.new(0,20,0,20)
+	box.Position = UDim2.new(1,-25,0.5,-10)
+	box.BackgroundColor3 = Color3.fromRGB(80,80,80)
+
+	btn.MouseButton1Click:Connect(function()
+		SETTINGS[setting] = not SETTINGS[setting]
+		box.BackgroundColor3 = SETTINGS[setting] and Color3.fromRGB(0,255,0) or Color3.fromRGB(80,80,80)
+	end)
 end
 
-Button("Players",10,function()
-	SETTINGS.Players = not SETTINGS.Players
-end)
+Toggle("Players",10,"Players")
+Toggle("Killers",50,"Killers")
+Toggle("Generators",90,"Generators")
+Toggle("Hooked",130,"Hooked")
 
-Button("Killers",50,function()
-	SETTINGS.Killers = not SETTINGS.Killers
-end)
+-- MODE
+local modeBtn = Instance.new("TextButton", Frame)
+modeBtn.Size = UDim2.new(1,-10,0,30)
+modeBtn.Position = UDim2.new(0,5,0,170)
+modeBtn.Text = "Mode: Outline"
+modeBtn.BackgroundColor3 = Color3.fromRGB(40,40,40)
+modeBtn.TextColor3 = Color3.new(1,1,1)
 
-Button("Generators",90,function()
-	SETTINGS.Generators = not SETTINGS.Generators
-end)
-
-Button("Hooked",130,function()
-	SETTINGS.Hooked = not SETTINGS.Hooked
-end)
-
-Button("Mode",170,function()
+modeBtn.MouseButton1Click:Connect(function()
 	SETTINGS.Mode = SETTINGS.Mode == "Outline" and "Fill" or "Outline"
+	modeBtn.Text = "Mode: "..SETTINGS.Mode
 end)
 
--- ESP
-local function ESP(obj,color)
+-- ESP CREATE
+local function AddESP(obj,color)
 	if not obj or obj:FindFirstChild("ESP") then return end
 
 	local h = Instance.new("Highlight")
@@ -100,55 +106,64 @@ local function ESP(obj,color)
 	h.Adornee = obj
 	h.Parent = obj
 
-	if SETTINGS.Mode == "Outline" then
-		h.FillTransparency = 1
-	else
-		h.FillTransparency = 0.5
-		h.FillColor = color
-	end
-
 	h.OutlineColor = color
+	h.FillColor = color
+	h.FillTransparency = SETTINGS.Mode == "Outline" and 1 or 0.5
 	h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+end
+
+local function RemoveESP(obj)
+	if obj and obj:FindFirstChild("ESP") then
+		obj.ESP:Destroy()
+	end
 end
 
 -- LOOP
 RunService.RenderStepped:Connect(function()
 
-	if SETTINGS.Players then
-		for _,p in pairs(Players:GetPlayers()) do
-			if p ~= LocalPlayer and p.Character then
-				ESP(p.Character,COLORS.Player)
+	for _,p in pairs(Players:GetPlayers()) do
+		if p ~= LocalPlayer and p.Character then
+			if SETTINGS.Players then
+				AddESP(p.Character, COLORS.Player)
+			else
+				RemoveESP(p.Character)
 			end
 		end
 	end
 
-	if SETTINGS.Killers then
-		for _,p in pairs(Players:GetPlayers()) do
-			if p.Character and p.Character:FindFirstChildOfClass("Tool") then
-				ESP(p.Character,COLORS.Killer)
+	for _,p in pairs(Players:GetPlayers()) do
+		if p.Character and p.Character:FindFirstChildOfClass("Tool") then
+			if SETTINGS.Killers then
+				AddESP(p.Character, COLORS.Killer)
+			else
+				RemoveESP(p.Character)
 			end
 		end
 	end
 
-	if SETTINGS.Generators then
-		for _,v in pairs(workspace:GetDescendants()) do
-			if v.Name:lower():find("generator") then
-				ESP(v,COLORS.Generator)
+	for _,v in pairs(workspace:GetDescendants()) do
+		if v.Name:lower():find("generator") then
+			if SETTINGS.Generators then
+				AddESP(v, COLORS.Generator)
+			else
+				RemoveESP(v)
 			end
 		end
 	end
 
-	if SETTINGS.Hooked then
-		for _,p in pairs(Players:GetPlayers()) do
-			if p.Character and p.Character:FindFirstChild("Hooked") then
-				ESP(p.Character,COLORS.Hooked)
+	for _,p in pairs(Players:GetPlayers()) do
+		if p.Character and p.Character:FindFirstChild("Hooked") then
+			if SETTINGS.Hooked then
+				AddESP(p.Character, COLORS.Hooked)
+			else
+				RemoveESP(p.Character)
 			end
 		end
 	end
 
 end)
 
--- KEYBINDS
+-- KEYS
 local open = true
 
 UIS.InputBegan:Connect(function(input,gp)

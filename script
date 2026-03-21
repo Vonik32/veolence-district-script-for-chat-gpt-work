@@ -1,7 +1,8 @@
 local Players = game:GetService("Players")
 local UIS = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
-local LocalPlayer = Players.LocalPlayer
+
+local LP = Players.LocalPlayer
 
 -- SETTINGS
 local SETTINGS = {
@@ -19,6 +20,10 @@ local COLORS = {
 	Generator = Color3.fromRGB(255,255,0),
 	Hooked = Color3.fromRGB(255,0,255)
 }
+
+-- STORAGE
+local highlights = {}
+local connections = {}
 
 -- GUI
 local ScreenGui = Instance.new("ScreenGui", game.CoreGui)
@@ -59,8 +64,8 @@ UIS.InputChanged:Connect(function(input)
 	end
 end)
 
--- КНОПКА С КВАДРАТОМ
-local function Toggle(name, y, setting)
+-- TOGGLE UI
+local function Toggle(name, y, key)
 	local btn = Instance.new("TextButton", Frame)
 	btn.Size = UDim2.new(1,-10,0,30)
 	btn.Position = UDim2.new(0,5,0,y)
@@ -74,8 +79,8 @@ local function Toggle(name, y, setting)
 	box.BackgroundColor3 = Color3.fromRGB(80,80,80)
 
 	btn.MouseButton1Click:Connect(function()
-		SETTINGS[setting] = not SETTINGS[setting]
-		box.BackgroundColor3 = SETTINGS[setting] and Color3.fromRGB(0,255,0) or Color3.fromRGB(80,80,80)
+		SETTINGS[key] = not SETTINGS[key]
+		box.BackgroundColor3 = SETTINGS[key] and Color3.fromRGB(0,255,0) or Color3.fromRGB(80,80,80)
 	end)
 end
 
@@ -84,7 +89,7 @@ Toggle("Killers",50,"Killers")
 Toggle("Generators",90,"Generators")
 Toggle("Hooked",130,"Hooked")
 
--- MODE
+-- MODE BUTTON
 local modeBtn = Instance.new("TextButton", Frame)
 modeBtn.Size = UDim2.new(1,-10,0,30)
 modeBtn.Position = UDim2.new(0,5,0,170)
@@ -92,49 +97,62 @@ modeBtn.Text = "Mode: Outline"
 modeBtn.BackgroundColor3 = Color3.fromRGB(40,40,40)
 modeBtn.TextColor3 = Color3.new(1,1,1)
 
-modeBtn.MouseButton1Click:Connect(function()
-	SETTINGS.Mode = SETTINGS.Mode == "Outline" and "Fill" or "Outline"
-	modeBtn.Text = "Mode: "..SETTINGS.Mode
-end)
-
--- ESP CREATE
-local function AddESP(obj,color)
-	if not obj or obj:FindFirstChild("ESP") then return end
-
-	local h = Instance.new("Highlight")
-	h.Name = "ESP"
-	h.Adornee = obj
-	h.Parent = obj
-
-	h.OutlineColor = color
-	h.FillColor = color
-	h.FillTransparency = SETTINGS.Mode == "Outline" and 1 or 0.5
-	h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-end
-
-local function RemoveESP(obj)
-	if obj and obj:FindFirstChild("ESP") then
-		obj.ESP:Destroy()
-	end
-end
-
--- LOOP
-RunService.RenderStepped:Connect(function()
-
-	for _,p in pairs(Players:GetPlayers()) do
-		if p ~= LocalPlayer and p.Character then
-			if SETTINGS.Players then
-				AddESP(p.Character, COLORS.Player)
+local function UpdateMode()
+	for obj,hl in pairs(highlights) do
+		if hl and hl.Parent then
+			if SETTINGS.Mode == "Outline" then
+				hl.FillTransparency = 1
 			else
-				RemoveESP(p.Character)
+				hl.FillTransparency = 0.5
 			end
 		end
 	end
+end
+
+modeBtn.MouseButton1Click:Connect(function()
+	SETTINGS.Mode = SETTINGS.Mode == "Outline" and "Fill" or "Outline"
+	modeBtn.Text = "Mode: "..SETTINGS.Mode
+	UpdateMode()
+end)
+
+-- ESP FUNCTIONS
+local function AddESP(obj,color)
+	if not obj or highlights[obj] then return end
+	
+	local hl = Instance.new("Highlight")
+	hl.Adornee = obj
+	hl.Parent = obj
+	hl.OutlineColor = color
+	hl.FillColor = color
+	hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+	
+	hl.FillTransparency = SETTINGS.Mode == "Outline" and 1 or 0.5
+	
+	highlights[obj] = hl
+end
+
+local function RemoveESP(obj)
+	if highlights[obj] then
+		highlights[obj]:Destroy()
+		highlights[obj] = nil
+	end
+end
+
+-- LOGIC
+connections[#connections+1] = RunService.RenderStepped:Connect(function()
 
 	for _,p in pairs(Players:GetPlayers()) do
-		if p.Character and p.Character:FindFirstChildOfClass("Tool") then
-			if SETTINGS.Killers then
+		if p ~= LP and p.Character then
+			
+			local isKiller = p:FindFirstChild("Role") and tostring(p.Role.Value):lower():find("killer")
+			local isHooked = p.Character:FindFirstChild("Hooked")
+
+			if SETTINGS.Players and not isKiller then
+				AddESP(p.Character, COLORS.Player)
+			elseif SETTINGS.Killers and isKiller then
 				AddESP(p.Character, COLORS.Killer)
+			elseif SETTINGS.Hooked and isHooked then
+				AddESP(p.Character, COLORS.Hooked)
 			else
 				RemoveESP(p.Character)
 			end
@@ -151,30 +169,37 @@ RunService.RenderStepped:Connect(function()
 		end
 	end
 
-	for _,p in pairs(Players:GetPlayers()) do
-		if p.Character and p.Character:FindFirstChild("Hooked") then
-			if SETTINGS.Hooked then
-				AddESP(p.Character, COLORS.Hooked)
-			else
-				RemoveESP(p.Character)
-			end
-		end
-	end
-
 end)
 
 -- KEYS
 local open = true
 
-UIS.InputBegan:Connect(function(input,gp)
+connections[#connections+1] = UIS.InputBegan:Connect(function(input,gp)
 	if gp then return end
-
+	
 	if input.KeyCode == Enum.KeyCode.Insert then
 		open = not open
 		Frame.Visible = open
+		UIS.MouseIconEnabled = open
 	end
-
+	
 	if input.KeyCode == Enum.KeyCode.End then
-		ScreenGui:Destroy()
+		
+		-- FULL UNLOAD
+		for _,c in pairs(connections) do
+			pcall(function() c:Disconnect() end)
+		end
+		
+		for _,hl in pairs(highlights) do
+			pcall(function() hl:Destroy() end)
+		end
+		
+		highlights = {}
+		
+		if ScreenGui then
+			ScreenGui:Destroy()
+		end
+		
+		UIS.MouseIconEnabled = true
 	end
 end)

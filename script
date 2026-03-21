@@ -1,0 +1,151 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local LocalPlayer = Players.LocalPlayer
+
+-- НАСТРОЙКИ
+local SETTINGS = {
+    Players = true,
+    Killers = true,
+    Generators = true,
+    Hooked = true,
+    Mode = "Outline" -- "Fill" / "Outline"
+}
+
+-- ЦВЕТА
+local COLORS = {
+    Player = Color3.fromRGB(0,255,255),
+    Killer = Color3.fromRGB(255,0,0),
+    Generator = Color3.fromRGB(255,255,0),
+    Hooked = Color3.fromRGB(255,100,255)
+}
+
+-- GUI
+local ScreenGui = Instance.new("ScreenGui", game.CoreGui)
+local Frame = Instance.new("Frame", ScreenGui)
+Frame.Size = UDim2.new(0,250,0,300)
+Frame.Position = UDim2.new(0.1,0,0.1,0)
+Frame.BackgroundColor3 = Color3.fromRGB(20,20,20)
+Frame.BorderSizePixel = 0
+
+-- Drag
+local dragging, dragInput, dragStart, startPos
+Frame.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		dragging = true
+		dragStart = input.Position
+		startPos = Frame.Position
+	end
+end)
+
+Frame.InputChanged:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseMovement then
+		dragInput = input
+	end
+end)
+
+game:GetService("UserInputService").InputChanged:Connect(function(input)
+	if input == dragInput and dragging then
+		local delta = input.Position - dragStart
+		Frame.Position = UDim2.new(
+			startPos.X.Scale,
+			startPos.X.Offset + delta.X,
+			startPos.Y.Scale,
+			startPos.Y.Offset + delta.Y
+		)
+	end
+end)
+
+-- КНОПКИ
+local function CreateToggle(name, y, callback)
+	local btn = Instance.new("TextButton", Frame)
+	btn.Size = UDim2.new(1, -10, 0, 30)
+	btn.Position = UDim2.new(0,5,0,y)
+	btn.Text = name
+	btn.BackgroundColor3 = Color3.fromRGB(40,40,40)
+	btn.TextColor3 = Color3.new(1,1,1)
+
+	btn.MouseButton1Click:Connect(function()
+		callback()
+	end)
+end
+
+CreateToggle("Players", 10, function()
+	SETTINGS.Players = not SETTINGS.Players
+end)
+
+CreateToggle("Killers", 50, function()
+	SETTINGS.Killers = not SETTINGS.Killers
+end)
+
+CreateToggle("Generators", 90, function()
+	SETTINGS.Generators = not SETTINGS.Generators
+end)
+
+CreateToggle("Hooked", 130, function()
+	SETTINGS.Hooked = not SETTINGS.Hooked
+end)
+
+CreateToggle("Mode Switch", 170, function()
+	SETTINGS.Mode = SETTINGS.Mode == "Outline" and "Fill" or "Outline"
+end)
+
+-- ESP ФУНКЦИЯ
+local function CreateESP(obj, color)
+	if not obj or obj:FindFirstChild("ESP") then return end
+
+	local hl = Instance.new("Highlight")
+	hl.Name = "ESP"
+	hl.Adornee = obj
+	hl.Parent = obj
+
+	if SETTINGS.Mode == "Outline" then
+		hl.FillTransparency = 1
+	else
+		hl.FillTransparency = 0.5
+		hl.FillColor = color
+	end
+
+	hl.OutlineColor = color
+	hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+end
+
+-- ЛОГИКА
+RunService.RenderStepped:Connect(function()
+
+	-- Игроки
+	if SETTINGS.Players then
+		for _,plr in pairs(Players:GetPlayers()) do
+			if plr ~= LocalPlayer and plr.Character then
+				CreateESP(plr.Character, COLORS.Player)
+			end
+		end
+	end
+
+	-- Пример: маньяк (ищет по Tool)
+	if SETTINGS.Killers then
+		for _,plr in pairs(Players:GetPlayers()) do
+			if plr.Character and plr.Character:FindFirstChildOfClass("Tool") then
+				CreateESP(plr.Character, COLORS.Killer)
+			end
+		end
+	end
+
+	-- Генераторы (ищи по имени)
+	if SETTINGS.Generators then
+		for _,v in pairs(workspace:GetDescendants()) do
+			if v.Name:lower():find("generator") then
+				CreateESP(v, COLORS.Generator)
+			end
+		end
+	end
+
+	-- Повешенные
+	if SETTINGS.Hooked then
+		for _,plr in pairs(Players:GetPlayers()) do
+			if plr.Character and plr.Character:FindFirstChild("Hooked") then
+				CreateESP(plr.Character, COLORS.Hooked)
+			end
+		end
+	end
+
+end)

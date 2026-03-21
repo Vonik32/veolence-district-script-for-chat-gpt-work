@@ -1,34 +1,38 @@
 local Players = game:GetService("Players")
+local UIS = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
 
--- НАСТРОЙКИ
+-- SETTINGS
 local SETTINGS = {
-    Players = true,
-    Killers = true,
-    Generators = true,
-    Hooked = true,
-    Mode = "Outline" -- "Fill" / "Outline"
+	Players = true,
+	Killers = true,
+	Generators = true,
+	Hooked = true,
+	Mode = "Outline"
 }
 
--- ЦВЕТА
 local COLORS = {
-    Player = Color3.fromRGB(0,255,255),
-    Killer = Color3.fromRGB(255,0,0),
-    Generator = Color3.fromRGB(255,255,0),
-    Hooked = Color3.fromRGB(255,100,255)
+	Player = Color3.fromRGB(0,255,255),
+	Killer = Color3.fromRGB(255,0,0),
+	Generator = Color3.fromRGB(255,255,0),
+	Hooked = Color3.fromRGB(255,100,255)
 }
 
 -- GUI
 local ScreenGui = Instance.new("ScreenGui", game.CoreGui)
 local Frame = Instance.new("Frame", ScreenGui)
+
 Frame.Size = UDim2.new(0,250,0,300)
-Frame.Position = UDim2.new(0.1,0,0.1,0)
+Frame.AnchorPoint = Vector2.new(0.5,0.5)
+Frame.Position = UDim2.new(0.5,0,0.5,0)
 Frame.BackgroundColor3 = Color3.fromRGB(20,20,20)
 Frame.BorderSizePixel = 0
 
--- Drag
-local dragging, dragInput, dragStart, startPos
+-- DRAG (фикс нормальный)
+local dragging = false
+local dragStart, startPos
+
 Frame.InputBegan:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.MouseButton1 then
 		dragging = true
@@ -37,14 +41,14 @@ Frame.InputBegan:Connect(function(input)
 	end
 end)
 
-Frame.InputChanged:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseMovement then
-		dragInput = input
+Frame.InputEnded:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		dragging = false
 	end
 end)
 
-game:GetService("UserInputService").InputChanged:Connect(function(input)
-	if input == dragInput and dragging then
+UIS.InputChanged:Connect(function(input)
+	if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
 		local delta = input.Position - dragStart
 		Frame.Position = UDim2.new(
 			startPos.X.Scale,
@@ -56,96 +60,106 @@ game:GetService("UserInputService").InputChanged:Connect(function(input)
 end)
 
 -- КНОПКИ
-local function CreateToggle(name, y, callback)
-	local btn = Instance.new("TextButton", Frame)
-	btn.Size = UDim2.new(1, -10, 0, 30)
-	btn.Position = UDim2.new(0,5,0,y)
-	btn.Text = name
-	btn.BackgroundColor3 = Color3.fromRGB(40,40,40)
-	btn.TextColor3 = Color3.new(1,1,1)
+local function Button(text, y, callback)
+	local b = Instance.new("TextButton", Frame)
+	b.Size = UDim2.new(1,-10,0,30)
+	b.Position = UDim2.new(0,5,0,y)
+	b.Text = text
+	b.BackgroundColor3 = Color3.fromRGB(40,40,40)
+	b.TextColor3 = Color3.new(1,1,1)
 
-	btn.MouseButton1Click:Connect(function()
-		callback()
-	end)
+	b.MouseButton1Click:Connect(callback)
 end
 
-CreateToggle("Players", 10, function()
+Button("Players",10,function()
 	SETTINGS.Players = not SETTINGS.Players
 end)
 
-CreateToggle("Killers", 50, function()
+Button("Killers",50,function()
 	SETTINGS.Killers = not SETTINGS.Killers
 end)
 
-CreateToggle("Generators", 90, function()
+Button("Generators",90,function()
 	SETTINGS.Generators = not SETTINGS.Generators
 end)
 
-CreateToggle("Hooked", 130, function()
+Button("Hooked",130,function()
 	SETTINGS.Hooked = not SETTINGS.Hooked
 end)
 
-CreateToggle("Mode Switch", 170, function()
+Button("Mode",170,function()
 	SETTINGS.Mode = SETTINGS.Mode == "Outline" and "Fill" or "Outline"
 end)
 
--- ESP ФУНКЦИЯ
-local function CreateESP(obj, color)
+-- ESP
+local function ESP(obj,color)
 	if not obj or obj:FindFirstChild("ESP") then return end
 
-	local hl = Instance.new("Highlight")
-	hl.Name = "ESP"
-	hl.Adornee = obj
-	hl.Parent = obj
+	local h = Instance.new("Highlight")
+	h.Name = "ESP"
+	h.Adornee = obj
+	h.Parent = obj
 
 	if SETTINGS.Mode == "Outline" then
-		hl.FillTransparency = 1
+		h.FillTransparency = 1
 	else
-		hl.FillTransparency = 0.5
-		hl.FillColor = color
+		h.FillTransparency = 0.5
+		h.FillColor = color
 	end
 
-	hl.OutlineColor = color
-	hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+	h.OutlineColor = color
+	h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
 end
 
--- ЛОГИКА
+-- LOOP
 RunService.RenderStepped:Connect(function()
 
-	-- Игроки
 	if SETTINGS.Players then
-		for _,plr in pairs(Players:GetPlayers()) do
-			if plr ~= LocalPlayer and plr.Character then
-				CreateESP(plr.Character, COLORS.Player)
+		for _,p in pairs(Players:GetPlayers()) do
+			if p ~= LocalPlayer and p.Character then
+				ESP(p.Character,COLORS.Player)
 			end
 		end
 	end
 
-	-- Пример: маньяк (ищет по Tool)
 	if SETTINGS.Killers then
-		for _,plr in pairs(Players:GetPlayers()) do
-			if plr.Character and plr.Character:FindFirstChildOfClass("Tool") then
-				CreateESP(plr.Character, COLORS.Killer)
+		for _,p in pairs(Players:GetPlayers()) do
+			if p.Character and p.Character:FindFirstChildOfClass("Tool") then
+				ESP(p.Character,COLORS.Killer)
 			end
 		end
 	end
 
-	-- Генераторы (ищи по имени)
 	if SETTINGS.Generators then
 		for _,v in pairs(workspace:GetDescendants()) do
 			if v.Name:lower():find("generator") then
-				CreateESP(v, COLORS.Generator)
+				ESP(v,COLORS.Generator)
 			end
 		end
 	end
 
-	-- Повешенные
 	if SETTINGS.Hooked then
-		for _,plr in pairs(Players:GetPlayers()) do
-			if plr.Character and plr.Character:FindFirstChild("Hooked") then
-				CreateESP(plr.Character, COLORS.Hooked)
+		for _,p in pairs(Players:GetPlayers()) do
+			if p.Character and p.Character:FindFirstChild("Hooked") then
+				ESP(p.Character,COLORS.Hooked)
 			end
 		end
 	end
 
+end)
+
+-- KEYBINDS
+local open = true
+
+UIS.InputBegan:Connect(function(input,gp)
+	if gp then return end
+
+	if input.KeyCode == Enum.KeyCode.Insert then
+		open = not open
+		Frame.Visible = open
+	end
+
+	if input.KeyCode == Enum.KeyCode.End then
+		ScreenGui:Destroy()
+	end
 end)
